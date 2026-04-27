@@ -1,15 +1,35 @@
-# SmolVLM real-time camera demo
+# SmolVLM Vision Studio 🚀
 
-![demo](./demo.png)
+A real-time, interactive Vision-Language application powered by **SmolVLM-500M** and `llama.cpp`. This studio allows for both live webcam analysis and high-precision image uploads with real-time bounding box visualization.
 
-This repository is a simple demo for how to use llama.cpp server with SmolVLM 500M to get real-time object detection
+## ✨ Features
+- **Real-time Bounding Boxes**: Automatically parses coordinates from the model and renders green detection boxes.
+- **Modern Chat API**: Uses the high-performance `/v1/chat/completions` endpoint for superior image alignment.
+- **Optimized for SmolVLM**: Specifically tuned for the Idefics3 architecture with proper image markers and tokenization.
+- **Ultra-Lightweight**: The total model package is ~500MB, fitting easily into local VRAM.
 
-## How to setup
+## 🚀 How to Run
 
-1. Install [llama.cpp](https://github.com/ggml-org/llama.cpp)
-2. Run `llama-server -hf ggml-org/SmolVLM-500M-Instruct-GGUF`  
-   Note: you may need to add `-ngl 99` to enable GPU (if you are using NVidia/AMD/Intel GPU)  
-   Note (2): You can also try other models [here](https://github.com/ggml-org/llama.cpp/blob/master/docs/multimodal.md)
-3. Open `index.html`
-4. Optionally change the instruction (for example, make it returns JSON)
-5. Click on "Start" and enjoy
+### 1. Requirements
+- A working build of `llama.cpp` (specifically `llama-server`).
+- NVIDIA GPU with CUDA (recommended for real-time performance).
+
+### 2. Start the Inference Server
+The inference server includes the vision projector and an optimization to bypass template interference:
+```bash
+bash start.sh
+```
+*Note: This script handles port conflicts, model paths, and enables the `--no-jinja` flag required for SmolVLM.*
+
+### 3. Open the Dashboard
+Simply open `index.html` in any modern browser. 
+- **Live Mode**: Uses the webcam to analyze your environment.
+- **Image Upload**: Upload high-res photos for deep analysis and object detection.
+
+## 🛠️ Technical Details
+- **Architecture**: Idefics3 (SigLIP 512 + SmolLM2 360M).
+- **Quantization**: Q8_0 (8-bit) for near-lossless local inference.
+- **Prompt Format**: ChatML (`<|im_start|>User: <image>\n{instruction}<|im_end|>`).
+
+---
+*Created with ❤️ for the edge AI community.*
