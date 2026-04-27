@@ -1,0 +1,22 @@
+# Logs
+server.log
+*.log
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Environments / Dependencies
+node_modules/
+.venv/
+env/
+__pycache__/
+
+# Model Files (Optional: If you ever move them into this folder)
+*.gguf
+*.bin
+
+# Browser / Editor
+.vscode/
+.idea/
+.gemini/

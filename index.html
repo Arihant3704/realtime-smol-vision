@@ -3,263 +3,265 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Camera Interaction App</title>
-    <style>
-        body {
-            font-family: sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 20px;
-            padding: 20px;
-            background-color: #f0f0f0;
-        }
-        .controls, .io-areas {
-            display: flex;
-            gap: 10px;
-            align-items: center;
-            background-color: #fff;
-            padding: 15px;
-            border-radius: 8px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        }
-        .io-areas {
-            flex-direction: column;
-            align-items: stretch;
-        }
-        textarea {
-            width: 300px;
-            height: 80px;
-            padding: 8px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            font-size: 14px;
-        }
-        #videoFeed {
-            width: 480px;
-            height: 360px;
-            border: 2px solid #333;
-            background-color: #000;
-            border-radius: 8px;
-        }
-        #startButton {
-            padding: 10px 20px;
-            font-size: 16px;
-            cursor: pointer;
-            border: none;
-            border-radius: 4px;
-            color: white;
-        }
-        #startButton.start {
-            background-color: #28a745; /* Green */
-        }
-        #startButton.stop {
-            background-color: #dc3545; /* Red */
-        }
-        label {
-            font-weight: bold;
-        }
-        select {
-            padding: 8px;
-            border-radius: 4px;
-            border: 1px solid #ccc;
-        }
-        .hidden {
-            display: none;
-        }
-    </style>
+    <title>SmolVLM Vision Studio</title>
+    <link rel="stylesheet" href="index.css">
 </head>
 <body>
 
-    <h1>Camera Interaction App</h1>
+    <div class="app-container">
+        <header>
+            <h1>SmolVLM Vision Studio</h1>
+            <div id="statusIndicator" class="status-inactive">
+                <span class="status-dot"></span>
+                <span id="statusText">Ready</span>
+            </div>
+        </header>
 
-    <video id="videoFeed" autoplay playsinline></video>
-    <canvas id="canvas" class="hidden"></canvas> <!-- For capturing frames -->
+        <div class="viewer-card">
+            <div class="mode-tabs">
+                <div class="mode-tab active" onclick="switchMode('live')">Live Webcam</div>
+                <div class="mode-tab" onclick="switchMode('upload')">Image Upload</div>
+            </div>
 
-    <div class="io-areas">
-        <div>
-            <label for="baseURL">Base API:</label><br>
-            <input id="baseURL" name="Instruction" value="http://localhost:8080"></textarea>
+            <div class="viewer-wrapper">
+                <video id="videoFeed" autoplay playsinline></video>
+                <img id="imagePreview" class="hidden" alt="Uploaded Image">
+                <canvas id="detectionCanvas"></canvas>
+            </div>
+            
+            <div id="uploadControls" class="control-group hidden" style="margin-top: 1.5rem;">
+                <label for="imageUpload">Select Image</label>
+                <input type="file" id="imageUpload" accept="image/*" class="hidden">
+                <button class="btn btn-upload" onclick="document.getElementById('imageUpload').click()">
+                    <span>Click to upload image</span>
+                </button>
+            </div>
         </div>
-        <div>
-            <label for="instructionText">Instruction:</label><br>
-            <textarea id="instructionText" style="height: 2em; width: 40em" name="Instruction"></textarea>
+
+        <div class="controls-panel">
+            <div class="control-group">
+                <label for="baseURL">API Endpoint</label>
+                <input type="text" id="baseURL" value="http://localhost:8080">
+            </div>
+
+            <div class="control-group">
+                <label for="imageMarker">Special Marker</label>
+                <input type="text" id="imageMarker" value="<image>" placeholder="<image>">
+            </div>
+
+            <div class="control-group">
+                <label for="instructionText">Instruction</label>
+                <textarea id="instructionText" placeholder="What do you see?">What do you see?</textarea>
+            </div>
+
+            <button id="actionButton" class="btn btn-primary">Start Live Stream</button>
+            <button id="processImageButton" class="btn btn-primary hidden">Analyze Image</button>
         </div>
-        <div>
-            <label for="responseText">Response:</label><br>
-            <textarea id="responseText" style="height: 2em; width: 40em" name="Response" readonly placeholder="Server response will appear here..."></textarea>
+
+        <div class="response-card">
+            <label>Model Response</label>
+            <textarea id="responseText" readonly placeholder="Waiting for inference..."></textarea>
+            <div id="debugStatus" style="margin-top: 10px; font-size: 11px; color: #6366f1;"></div>
         </div>
     </div>
 
-    <div class="controls">
-        <label for="intervalSelect">Interval between 2 requests:</label>
-        <select id="intervalSelect" name="Interval between 2 requests">
-            <option value="100">100ms</option>
-            <option value="250">250ms</option>
-            <option value="500" selected>500ms</option>
-            <option value="1000">1s</option>
-            <option value="2000">2s</option>
-        </select>
-        <button id="startButton" class="start">Start</button>
-    </div>
+    <canvas id="processingCanvas" class="hidden"></canvas>
 
     <script>
         const video = document.getElementById('videoFeed');
-        const canvas = document.getElementById('canvas');
+        const imagePreview = document.getElementById('imagePreview');
+        const detectionCanvas = document.getElementById('detectionCanvas');
+        const processingCanvas = document.getElementById('processingCanvas');
         const baseURL = document.getElementById('baseURL');
+        const imageMarker = document.getElementById('imageMarker');
         const instructionText = document.getElementById('instructionText');
         const responseText = document.getElementById('responseText');
-        const intervalSelect = document.getElementById('intervalSelect');
-        const startButton = document.getElementById('startButton');
+        const debugStatus = document.getElementById('debugStatus');
+        const actionButton = document.getElementById('actionButton');
+        const processImageButton = document.getElementById('processImageButton');
+        const imageUpload = document.getElementById('imageUpload');
+        const statusIndicator = document.getElementById('statusIndicator');
+        const statusText = document.getElementById('statusText');
 
-        instructionText.value = "What do you see?"; // default instruction
-
+        let currentMode = 'live';
         let stream;
         let intervalId;
         let isProcessing = false;
+        let uploadedImageBase64 = null;
 
-        // Returns response text (string)
-        async function sendChatCompletionRequest(instruction, imageBase64URL) {
-            const response = await fetch(`${baseURL.value}/v1/chat/completions`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    max_tokens: 100,
-                    messages: [
-                        { role: 'user', content: [
-                            { type: 'text', text: instruction },
-                            { type: 'image_url', image_url: {
-                                url: imageBase64URL,
-                            } }
-                        ] },
-                    ]
-                })
+        function switchMode(mode) {
+            currentMode = mode;
+            handleStop();
+            document.querySelectorAll('.mode-tab').forEach(tab => {
+                tab.classList.toggle('active', tab.textContent.toLowerCase().includes(mode));
             });
-            if (!response.ok) {
-                const errorData = await response.text();
-                return `Server error: ${response.status} - ${errorData}`;
+            if (mode === 'live') {
+                video.classList.remove('hidden');
+                imagePreview.classList.add('hidden');
+                document.getElementById('uploadControls').classList.add('hidden');
+                actionButton.classList.remove('hidden');
+                processImageButton.classList.add('hidden');
+                initCamera();
+            } else {
+                video.classList.add('hidden');
+                imagePreview.classList.remove('hidden');
+                document.getElementById('uploadControls').classList.remove('hidden');
+                actionButton.classList.add('hidden');
+                processImageButton.classList.remove('hidden');
             }
-            const data = await response.json();
-            return data.choices[0].message.content;
+            clearCanvas();
         }
 
-        // 1. Ask for camera permission on load
+        imageUpload.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                uploadedImageBase64 = event.target.result;
+                imagePreview.src = uploadedImageBase64;
+                clearCanvas();
+            };
+            reader.readAsDataURL(file);
+        });
+
         async function initCamera() {
             try {
                 stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
                 video.srcObject = stream;
-                responseText.value = "Camera access granted. Ready to start.";
-            } catch (err) {
-                console.error("Error accessing camera:", err);
-                responseText.value = `Error accessing camera: ${err.name} - ${err.message}. Please ensure permissions are granted and you are on HTTPS or localhost.`;
-                alert(`Error accessing camera: ${err.name}. Make sure you've granted permission and are on HTTPS or localhost.`);
-            }
+            } catch (err) { console.error(err); }
         }
 
-        function captureImage() {
-            if (!stream || !video.videoWidth) {
-                console.warn("Video stream not ready for capture.");
-                return null;
-            }
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            const context = canvas.getContext('2d');
-            context.drawImage(video, 0, 0, canvas.width, canvas.height);
-            return canvas.toDataURL('image/jpeg', 0.8); // Use JPEG for smaller size, 0.8 quality
+        function clearCanvas() {
+            const ctx = detectionCanvas.getContext('2d');
+            ctx.clearRect(0, 0, detectionCanvas.width, detectionCanvas.height);
         }
 
-        async function sendData() {
-            if (!isProcessing) return; // Ensure we don't have overlapping requests if processing takes longer than interval
+        async function performInference() {
+            if (isProcessing && currentMode === 'upload' && !video.paused) return;
+            const base64 = captureFrame();
+            if (!base64) return;
 
-            const instruction = instructionText.value;
-            const imageBase64URL = captureImage();
+            statusIndicator.classList.add('status-active');
+            statusText.textContent = "Processing...";
+            clearCanvas();
 
-            if (!imageBase64URL) {
-                responseText.value = "Failed to capture image. Stream might not be active.";
-                // Optionally stop processing if image capture fails consistently
-                // handleStop();
-                return;
-            }
-
-            const payload = {
-                instruction: instruction,
-                imageBase64URL: imageBase64URL
-            };
+            const instruction = instructionText.value || "What do you see?";
+            
+            debugStatus.textContent = "Sending " + (base64.length/1024).toFixed(1) + "KB to " + baseURL.value;
 
             try {
-                const response = await sendChatCompletionRequest(payload.instruction, payload.imageBase64URL);
-                responseText.value = response;
-            } catch (error) {
-                console.error('Error sending data:', error);
-                responseText.value = `Error: ${error.message}`;
+                const response = await fetch(`${baseURL.value}/v1/chat/completions`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        messages: [
+                            {
+                                role: "user",
+                                content: [
+                                    { type: "image_url", image_url: { url: base64 } },
+                                    { type: "text", text: `<image>\n${instruction}` }
+                                ]
+                            }
+                        ],
+                        temperature: 0.1,
+                        max_tokens: 256,
+                        stop: ["<|im_start|>", "<|im_end|>", "<end_of_utterance>", "User:", "Assistant:"]
+                    })
+                });
+
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const data = await response.json();
+                const content = data.choices[0].message.content.trim();
+                responseText.value = content;
+                
+                // Parse and draw bounding boxes if any
+                drawBoundingBoxes(content);
+                
+            } catch (err) {
+                responseText.value = `Error: ${err.message}`;
+            } finally {
+                statusIndicator.classList.remove('status-active');
+                statusText.textContent = currentMode === 'live' ? "Live" : "Idle";
             }
+        }
+
+        function drawBoundingBoxes(text) {
+            // Regex for SmolVLM standard coordinate format: [<y1>, <x1>, <y2>, <x2>] or similar
+            // Coordinates are usually 0-1000 normalized
+            const boxRegex = /\[\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\]/g;
+            const boxes = [];
+            let match;
+            
+            while ((match = boxRegex.exec(text)) !== null) {
+                boxes.push({
+                    y1: parseInt(match[1]),
+                    x1: parseInt(match[2]),
+                    y2: parseInt(match[3]),
+                    x2: parseInt(match[4])
+                });
+            }
+
+            if (boxes.length === 0) return;
+
+            const ctx = detectionCanvas.getContext('2d');
+            const w = detectionCanvas.width;
+            const h = detectionCanvas.height;
+
+            boxes.forEach(box => {
+                // Denormalize 0-1000 to pixels
+                const x = (box.x1 / 1000) * w;
+                const y = (box.y1 / 1000) * h;
+                const width = ((box.x2 - box.x1) / 1000) * w;
+                const height = ((box.y2 - box.y1) / 1000) * h;
+
+                ctx.strokeStyle = '#22c55e';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(x, y, width, height);
+
+                // Label background
+                ctx.fillStyle = '#22c55e';
+                ctx.fillRect(x, y - 20, 80, 20);
+                ctx.fillStyle = 'white';
+                ctx.font = 'bold 12px Inter';
+                ctx.fillText('DETECTED', x + 5, y - 5);
+            });
+        }
+
+        function captureFrame() {
+            let target = currentMode === 'live' ? video : imagePreview;
+            if (currentMode === 'live' && (!stream || !video.videoWidth)) return null;
+            if (currentMode === 'upload' && !uploadedImageBase64) return null;
+
+            processingCanvas.width = 512; // SmolVLM is trained on 512x512
+            processingCanvas.height = 512;
+            
+            detectionCanvas.width = target.clientWidth;
+            detectionCanvas.height = target.clientHeight;
+            
+            const ctx = processingCanvas.getContext('2d');
+            ctx.drawImage(target, 0, 0, 512, 512);
+            return processingCanvas.toDataURL('image/jpeg', 0.8);
         }
 
         function handleStart() {
-            if (!stream) {
-                responseText.value = "Camera not available. Cannot start.";
-                alert("Camera not available. Please grant permission first.");
-                return;
-            }
             isProcessing = true;
-            startButton.textContent = "Stop";
-            startButton.classList.remove('start');
-            startButton.classList.add('stop');
-
-            instructionText.disabled = true;
-            intervalSelect.disabled = true;
-
-            responseText.value = "Processing started...";
-
-            const intervalMs = parseInt(intervalSelect.value, 10);
-            
-            // Initial immediate call
-            sendData(); 
-            
-            // Then set interval
-            intervalId = setInterval(sendData, intervalMs);
+            actionButton.textContent = "Stop Live Stream";
+            actionButton.classList.replace('btn-primary', 'btn-danger');
+            performInference();
+            intervalId = setInterval(performInference, 2000);
         }
 
         function handleStop() {
             isProcessing = false;
-            if (intervalId) {
-                clearInterval(intervalId);
-                intervalId = null;
-            }
-            startButton.textContent = "Start";
-            startButton.classList.remove('stop');
-            startButton.classList.add('start');
-
-            instructionText.disabled = false;
-            intervalSelect.disabled = false;
-            if (responseText.value.startsWith("Processing started...")) {
-                responseText.value = "Processing stopped.";
-            }
+            if (intervalId) { clearInterval(intervalId); intervalId = null; }
+            actionButton.textContent = "Start Live Stream";
+            actionButton.classList.replace('btn-danger', 'btn-primary');
         }
 
-        startButton.addEventListener('click', () => {
-            if (isProcessing) {
-                handleStop();
-            } else {
-                handleStart();
-            }
-        });
+        actionButton.addEventListener('click', () => isProcessing ? handleStop() : handleStart());
+        processImageButton.addEventListener('click', performInference);
 
-        // Initialize camera when the page loads
-        window.addEventListener('DOMContentLoaded', initCamera);
-
-        // Optional: Stop stream when page is closed/navigated away to release camera
-        window.addEventListener('beforeunload', () => {
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
-            }
-            if (intervalId) {
-                clearInterval(intervalId);
-            }
-        });
-
+        window.addEventListener('DOMContentLoaded', () => { initCamera(); });
     </script>
 </body>
 </html>
