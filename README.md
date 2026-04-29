@@ -10,6 +10,15 @@ A real-time, interactive Vision-Language application powered by **SmolVLM-500M**
 - **Video Inference**: Upload video files and perform frame-by-frame analysis with live detection overlays.
 - **Ultra-Lightweight**: Total model package is ~500MB.
 
+## 📊 Technical Specifications
+| Specification | Details |
+| --- | --- |
+| **Model** | SmolVLM-500M-Instruct (Quantized Q8_0) |
+| **Model Size** | ~520 MB (Total) |
+| **RAM Required** | 1 GB+ |
+| **GPU VRAM** | ~1.5 GB (Recommended for real-time) |
+| **Architecture** | SigLIP Vision Encoder + SmolLM2 500M |
+
 ---
 
 ## 💻 Fresh Installation (Ubuntu)
