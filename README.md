@@ -1,8 +1,9 @@
 # SmolVLM Vision Studio 🚀
 ![SmolVLM Demo](demo.gif)
 
-A real-time, interactive Vision-Language application powered by **SmolVLM-500M** and `llama.cpp`. 
 <img width="847" height="913" alt="image" src="https://github.com/user-attachments/assets/0ac170cb-7e61-4105-947a-5f022f6fcec4" />
+
+A real-time, interactive Vision-Language application powered by **SmolVLM-500M** and `llama.cpp`. 
 
 ## ✨ Features
 - **Real-time Bounding Boxes**: Automatically parses coordinates from the model and renders green detection boxes.
