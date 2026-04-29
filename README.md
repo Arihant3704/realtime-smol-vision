@@ -6,6 +6,7 @@ A real-time, interactive Vision-Language application powered by **SmolVLM-500M**
 ## ✨ Features
 - **Real-time Bounding Boxes**: Automatically parses coordinates from the model and renders green detection boxes.
 - **Modern Chat API**: Uses the high-performance `/v1/chat/completions` endpoint for superior image alignment.
+- **Video Inference**: Upload video files and perform frame-by-frame analysis with live detection overlays.
 - **Ultra-Lightweight**: Total model package is ~500MB.
 
 ---
@@ -35,6 +36,9 @@ bash start.sh
 
 ### 4. Open the Dashboard
 Open `index.html` in your browser to start the webcam or upload images.
+- **Live Mode**: Real-time analysis using your webcam.
+- **Image Upload**: High-res analysis of static images.
+- **Video Upload**: Automated frame-by-frame inference for video files.
 
 ---
 

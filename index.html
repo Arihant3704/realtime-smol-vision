@@ -21,10 +21,12 @@
             <div class="mode-tabs">
                 <div class="mode-tab active" onclick="switchMode('live')">Live Webcam</div>
                 <div class="mode-tab" onclick="switchMode('upload')">Image Upload</div>
+                <div class="mode-tab" onclick="switchMode('video')">Video Upload</div>
             </div>
 
             <div class="viewer-wrapper">
                 <video id="videoFeed" autoplay playsinline></video>
+                <video id="videoPlayer" class="hidden" controls playsinline></video>
                 <img id="imagePreview" class="hidden" alt="Uploaded Image">
                 <canvas id="detectionCanvas"></canvas>
             </div>
@@ -34,6 +36,14 @@
                 <input type="file" id="imageUpload" accept="image/*" class="hidden">
                 <button class="btn btn-upload" onclick="document.getElementById('imageUpload').click()">
                     <span>Click to upload image</span>
+                </button>
+            </div>
+
+            <div id="videoUploadControls" class="control-group hidden" style="margin-top: 1.5rem;">
+                <label for="videoUpload">Select Video</label>
+                <input type="file" id="videoUpload" accept="video/*" class="hidden">
+                <button class="btn btn-upload" onclick="document.getElementById('videoUpload').click()">
+                    <span>Click to upload video</span>
                 </button>
             </div>
         </div>
@@ -56,6 +66,7 @@
 
             <button id="actionButton" class="btn btn-primary">Start Live Stream</button>
             <button id="processImageButton" class="btn btn-primary hidden">Analyze Image</button>
+            <button id="videoInferenceButton" class="btn btn-primary hidden">Start Video Inference</button>
         </div>
 
         <div class="response-card">
@@ -69,6 +80,7 @@
 
     <script>
         const video = document.getElementById('videoFeed');
+        const videoPlayer = document.getElementById('videoPlayer');
         const imagePreview = document.getElementById('imagePreview');
         const detectionCanvas = document.getElementById('detectionCanvas');
         const processingCanvas = document.getElementById('processingCanvas');
@@ -79,7 +91,9 @@
         const debugStatus = document.getElementById('debugStatus');
         const actionButton = document.getElementById('actionButton');
         const processImageButton = document.getElementById('processImageButton');
+        const videoInferenceButton = document.getElementById('videoInferenceButton');
         const imageUpload = document.getElementById('imageUpload');
+        const videoUpload = document.getElementById('videoUpload');
         const statusIndicator = document.getElementById('statusIndicator');
         const statusText = document.getElementById('statusText');
 
@@ -95,22 +109,40 @@
             document.querySelectorAll('.mode-tab').forEach(tab => {
                 tab.classList.toggle('active', tab.textContent.toLowerCase().includes(mode));
             });
+            
+            // Hide everything first
+            video.classList.add('hidden');
+            videoPlayer.classList.add('hidden');
+            imagePreview.classList.add('hidden');
+            document.getElementById('uploadControls').classList.add('hidden');
+            document.getElementById('videoUploadControls').classList.add('hidden');
+            actionButton.classList.add('hidden');
+            processImageButton.classList.add('hidden');
+            videoInferenceButton.classList.add('hidden');
+
             if (mode === 'live') {
                 video.classList.remove('hidden');
-                imagePreview.classList.add('hidden');
-                document.getElementById('uploadControls').classList.add('hidden');
                 actionButton.classList.remove('hidden');
-                processImageButton.classList.add('hidden');
                 initCamera();
-            } else {
-                video.classList.add('hidden');
+            } else if (mode === 'upload') {
                 imagePreview.classList.remove('hidden');
                 document.getElementById('uploadControls').classList.remove('hidden');
-                actionButton.classList.add('hidden');
                 processImageButton.classList.remove('hidden');
+            } else if (mode === 'video') {
+                videoPlayer.classList.remove('hidden');
+                document.getElementById('videoUploadControls').classList.remove('hidden');
+                videoInferenceButton.classList.remove('hidden');
             }
             clearCanvas();
         }
+
+        videoUpload.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const url = URL.createObjectURL(file);
+            videoPlayer.src = url;
+            clearCanvas();
+        });
 
         imageUpload.addEventListener('change', (e) => {
             const file = e.target.files[0];
@@ -137,7 +169,8 @@
         }
 
         async function performInference() {
-            if (isProcessing && currentMode === 'upload' && !video.paused) return;
+            if (isProcessing && (currentMode === 'upload' || currentMode === 'video') && !isProcessingLoop) return;
+            
             const base64 = captureFrame();
             if (!base64) return;
 
@@ -228,9 +261,20 @@
         }
 
         function captureFrame() {
-            let target = currentMode === 'live' ? video : imagePreview;
+            let target;
+            if (currentMode === 'live') target = video;
+            else if (currentMode === 'upload') target = imagePreview;
+            else if (currentMode === 'video') target = videoPlayer;
+
             if (currentMode === 'live' && (!stream || !video.videoWidth)) return null;
             if (currentMode === 'upload' && !uploadedImageBase64) return null;
+            if (currentMode === 'video' && !videoPlayer.src) return null;
+
+            const isVideo = currentMode === 'live' || currentMode === 'video';
+            const sourceW = isVideo ? target.videoWidth : target.naturalWidth;
+            const sourceH = isVideo ? target.videoHeight : target.naturalHeight;
+            
+            if (!sourceW || !sourceH) return null;
 
             processingCanvas.width = 512; // SmolVLM is trained on 512x512
             processingCanvas.height = 512;
@@ -243,22 +287,37 @@
             return processingCanvas.toDataURL('image/jpeg', 0.8);
         }
 
+        let isProcessingLoop = false;
         function handleStart() {
             isProcessing = true;
-            actionButton.textContent = "Stop Live Stream";
-            actionButton.classList.replace('btn-primary', 'btn-danger');
+            isProcessingLoop = true;
+            
+            const btn = currentMode === 'live' ? actionButton : videoInferenceButton;
+            btn.textContent = currentMode === 'live' ? "Stop Live Stream" : "Stop Video Inference";
+            btn.classList.replace('btn-primary', 'btn-danger');
+            
+            if (currentMode === 'video') videoPlayer.play();
+            
             performInference();
             intervalId = setInterval(performInference, 2000);
         }
 
         function handleStop() {
             isProcessing = false;
+            isProcessingLoop = false;
             if (intervalId) { clearInterval(intervalId); intervalId = null; }
+            
             actionButton.textContent = "Start Live Stream";
             actionButton.classList.replace('btn-danger', 'btn-primary');
+            
+            videoInferenceButton.textContent = "Start Video Inference";
+            videoInferenceButton.classList.replace('btn-danger', 'btn-primary');
+            
+            if (currentMode === 'video') videoPlayer.pause();
         }
 
         actionButton.addEventListener('click', () => isProcessing ? handleStop() : handleStart());
+        videoInferenceButton.addEventListener('click', () => isProcessing ? handleStop() : handleStart());
         processImageButton.addEventListener('click', performInference);
 
         window.addEventListener('DOMContentLoaded', () => { initCamera(); });
